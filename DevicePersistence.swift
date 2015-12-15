@@ -20,10 +20,18 @@ enum SaveStatus {
     case Failure(String)
 }
 
-struct DevicePersistence {
+protocol DevicePersistenceDelegate: class {
+    func devicesReturnedFromBackground(devices: [Device])
+    func devicesFailedToReturn(failureMessage: String)
+}
+
+class DevicePersistence {
     
-    init(context: NSManagedObjectContext) {
+    weak var delegate: DevicePersistenceDelegate?
+    
+    init(context: NSManagedObjectContext, storeCoordinator: NSPersistentStoreCoordinator) {
         self.context = context
+        self.storeCoordinator = storeCoordinator
     }
     
     private enum DeviceEntityAttributes: String {
@@ -32,6 +40,7 @@ struct DevicePersistence {
     }
     
     private let context: NSManagedObjectContext
+    private let storeCoordinator: NSPersistentStoreCoordinator
     private let deviceEntityName = "Device"
 
     
@@ -50,23 +59,45 @@ struct DevicePersistence {
         return save()
     }
     
+    func grabDevicesFromBackground() {
+
+        let privateContext = NSManagedObjectContext(concurrencyType: .PrivateQueueConcurrencyType)
+        privateContext.persistentStoreCoordinator = storeCoordinator
+        privateContext.performBlock { [unowned self]() -> Void in
+            do {
+                let results = try privateContext.executeFetchRequest(self.deviceFetchRequest) as! [NSManagedObject]
+                self.delegate?.devicesReturnedFromBackground(self.transformedResults(results))
+            } catch {
+                self.delegate?.devicesFailedToReturn("There was a fetch error!")
+            }
+        }
+    }
+    
     var devices: FetchStatus<[Device]> {
         do {
-            let fetchRequest = NSFetchRequest(entityName: deviceEntityName)
-            let descriptor = NSSortDescriptor(key: DeviceEntityAttributes.DeviceNumber.rawValue, ascending: true)
-            fetchRequest.sortDescriptors = [descriptor]
-            var devices = [Device]()
-            let results = try context.executeFetchRequest(fetchRequest) as! [NSManagedObject]
-            for result in results {
-                if let deviceType = result.valueForKey(DeviceEntityAttributes.DeviceType.rawValue) as? String,
-                    deviceNumber = result.valueForKey(DeviceEntityAttributes.DeviceNumber.rawValue) as? Int {
-                        devices.append(Device(deviceNumber: deviceNumber, deviceType: deviceType))
-                }
-            }
-            return FetchStatus.Success(devices)
+            let results = try context.executeFetchRequest(deviceFetchRequest) as! [NSManagedObject]
+            return FetchStatus.Success(transformedResults(results))
         } catch {
             return FetchStatus.Failure("There was a fetch error!")
         }
+    }
+    
+    private func transformedResults(results: [NSManagedObject]) -> [Device] {
+        var devices = [Device]()
+        for result in results {
+            if let deviceType = result.valueForKey(DeviceEntityAttributes.DeviceType.rawValue) as? String,
+                deviceNumber = result.valueForKey(DeviceEntityAttributes.DeviceNumber.rawValue) as? Int {
+                    devices.append(Device(deviceNumber: deviceNumber, deviceType: deviceType))
+            }
+        }
+        return devices
+    }
+    
+    private var deviceFetchRequest: NSFetchRequest {
+        let fetchRequest = NSFetchRequest(entityName: deviceEntityName)
+        let descriptor = NSSortDescriptor(key: DeviceEntityAttributes.DeviceNumber.rawValue, ascending: true)
+        fetchRequest.sortDescriptors = [descriptor]
+        return fetchRequest
     }
     
     private var deviceCount: Int? {

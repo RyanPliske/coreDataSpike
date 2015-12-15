@@ -22,6 +22,10 @@ class InitialPresenter: InitialViewDelegate, InitialModelDelegate {
         model.deviceTextRequested()
     }
     
+    func dataRequestedviaBackground() {
+        model.dataRequestedviaBackground()
+    }
+    
     //MARK: InitialModelDelegate
     
     func updateTextViewWith(text: String) {

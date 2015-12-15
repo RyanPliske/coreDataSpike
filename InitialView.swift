@@ -3,12 +3,14 @@ import UIKit
 protocol InitialViewDelegate: class {
     func moreDataRequested()
     func dataRequested()
+    func dataRequestedviaBackground()
 }
 
 class InitialView: UIView {
     
     weak var delegate: InitialViewDelegate?
-    @IBOutlet weak var textView: UITextView!
+    
+    @IBOutlet private weak var textView: UITextView!
     
     func updateViewWith(text: String) {
         textView.text = text
@@ -21,6 +23,12 @@ class InitialView: UIView {
     @IBAction func refreshButtonPressed(sender: AnyObject) {
         delegate?.dataRequested()
     }
+    
+    @IBAction func backgroundRefreshButtonPressed(sender: AnyObject) {
+        delegate?.dataRequestedviaBackground()
+    }
+    
+    
     
 }
 
